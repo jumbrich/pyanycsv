@@ -3,7 +3,7 @@ pyanycsv
 ========
 
 
-Add a short description here!
+An advanced csv parser to replace the standard python csv library
 
 
 Description
