@@ -1,25 +1,18 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, unicode_literals
+
+import itertools
+
+from anycsv.config import anycsvconfig as anycsvconfig
+from pyjuhelpers.logging import log_func_detail
+
 __author__ = 'jumbrich'
 
-import subprocess
-#import chardet
-#from chardet.universaldetector import UniversalDetector
+import structlog
+log = structlog.get_logger()
+
 from cchardet import UniversalDetector
-#import magic
-
-#from chardet.chardetect import UniversalDetector
-#import bs4
-
-# UnicodeDammit was refactored a lot recently.
-# It now falls back on cchardet if its in the path.
-# Otherwise, we have to make sure that it does *not* fall back on
-# chardet as it is slow and has only minimal charset coverage.
-#if not 'cchardet' in bs4.dammit.__dict__:
-#    # Either chardet or nothing
-#    bs4.dammit.chardet_dammit = lambda string: None
-
 
 def get_header_encoding(header):
     cont_type = None
@@ -40,25 +33,28 @@ def get_header_encoding(header):
             header_encoding = header_encoding[9:]
     return header_encoding
 
-def get_charset(filename):
-    ''' returns the charset of a file using the unix tool 'file' '''
-    output = None
-    try:
-        proc = subprocess.Popen('file -bi %s' % filename,
-                                shell=True,
-                                stdin=subprocess.PIPE,
-                                stdout=subprocess.PIPE,
-                                )
-        output = proc.stdout.readline()
-        output = output.split('=')[1].strip()
-    except Exception:
-        return None
-    return output
 
-def guessEncoding(content, header=None):
-    results = {'default': {'encoding': 'utf8'}}
-    results['lib_chardet'] = guessWithChardet(content)
-    #results['magic']= guessWithMagic(content)
+def detect_encoding_with_chardet(iostream, min_lines = 10, max_lines=anycsvconfig.NO_SNIFF_LINES):
+    detector = UniversalDetector()
+
+    if max_lines != -1:
+        max_lines = max(min_lines, max_lines)
+
+    c = 0
+    for line in iostream:
+        c += 1
+        detector.feed(line)
+        if c > min_lines and (detector.done or min(c, max_lines) == max_lines):
+            break
+    detector.close()
+    return detector.result #{'encoding':, 'confidence':}
+
+@log_func_detail(log, time_key="detect_encoding")
+def detect_encoding(iostream, header=None,min_lines = 10, max_lines=anycsvconfig.NO_SNIFF_LINES):
+
+    results = { 'default': {'encoding': anycsvconfig.DEFAULT_ENCODING} }
+
+    results['lib_chardet'] = detect_encoding_with_chardet(iostream, min_lines,max_lines)
 
     if header:
         header_encoding = get_header_encoding(header)
@@ -66,66 +62,19 @@ def guessEncoding(content, header=None):
 
     return results
 
+def prob_encoding(ios, encoding_result, max_lines = anycsvconfig.NO_SNIFF_LINES ):
 
-def guessWithChardet(content):
-    u = UniversalDetector()
-    for line in content.split(b"\n"):
-        u.feed(line)
-    u.close()
-    result = u.result
-    return result
+    cnt=b''
+    for line in itertools.islice(ios, max_lines):
+        cnt += line
 
+    for k in anycsvconfig.ENC_PRIORITY:
+        try:
+            if k in encoding_result and encoding_result[k]['encoding'] is not None:
+                content_encoded = cnt.decode(encoding=encoding_result[k]['encoding'])
+                c_enc = encoding_result[k]['encoding']
+                break
+        except Exception as e:
+            log.debug("Encoding Error",encoding_result[k]['encoding'])
 
-#def guessWithMagic(content):
-#    result = magic.detect_from_content(content)
-#    return result.__dict__
-
-
-# #worth to look into
-# #https://bitbucket.org/Telofy/utilofies/csvprofiler/0d8cdc3ae5a0a08e7fb5906d96f0d8e2284751d1/utilofies/bslib.py?at=master#cl-15
-# def intelligent_decode(fname):
-#     """ One problem remains in the latest version of UnicodeDammit, namely
-#         that pages that have beautifully declared encodings but contain one
-#         small erroneous byte sequence somewhere will fail to be decoded with
-#         the mostly correct encodings, while Windows-1252 somehow succeeds, but
-#         completely mucks up all umlauts and ligatures. Hence I want to remove
-#         Windows-1252 from the potential encodings.
-#
-#         I don't fall back on cchardet just yet.
-#     """
-#     detector = bs4.dammit.EncodingDetector(fname)
-#     # Fall back on forcing it to UTF-8 only if no other encodings
-#     # could be found. (I use override_encodings for the HTTP encoding,
-#     # which seems at least less reliable to me than the declared encoding.)
-#     potential_encodings = \
-#         filter(bool, [detector.sniffed_encoding, detector.declared_encoding]
-#                + list(detector.override_encodings)) \
-#         or ['utf-8']
-#     contains_replacement_characters = False
-#     tried_encodings = []
-#     unicode_markup = None
-#     original_encoding = None
-#     for encoding in potential_encodings:
-#         tried_encodings.append(encoding)
-#         try:
-#             unicode_markup = detector.markup.decode(encoding)
-#         except Exception as excp:
-#             #logger.info('Unsuccessfully tried encoding %s: %r', encoding, excp)
-#             print 'Unsuccessfully tried encoding %s: %r', encoding, excp
-#         if unicode_markup is not None:
-#             original_encoding = encoding
-#             break
-#     if unicode_markup is None:
-#         # Whatever!
-#         unicode_markup = detector.markup.decode(
-#             potential_encodings[0], 'replace')
-#         original_encoding = potential_encodings[0]
-#         contains_replacement_characters = True
-#     return type(b'MockDammit', (object,), {
-#         'contains_replacement_characters': contains_replacement_characters,
-#         'original_encoding': original_encoding,
-#         'detector': detector,
-#         'is_html': detector.is_html,
-#         'markup': detector.markup,
-#         'tried_encodings': tried_encodings,
-#         'unicode_markup': unicode_markup})
+    return c_enc

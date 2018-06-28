@@ -17,6 +17,7 @@ entry_points = """
 # script_name = anycsv.module:function
 # For example:
 # fibonacci = anycsv.skeleton:run
+anycsv= anycsv.cli:main
 """
 
 

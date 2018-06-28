@@ -1,7 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 from __future__ import absolute_import, division, print_function, unicode_literals
+from collections import namedtuple
+Table = namedtuple("Table", ['csv', 'csvReader', 'delimiter','quotechar','encoding','dialect'])
 class Table():
+    __slots__ = ()
+
     def __init__(self, filename=None, url=None):
         self.filename = filename
         self.url=url
