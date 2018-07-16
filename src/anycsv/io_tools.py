@@ -197,7 +197,6 @@ class BufferedAutoEncodingStream(object):
                 #we have more lines read as in buffer
 
                 line = next(self.input)
-                print(line)
                 self.hash.update(line)
 
                 self.total_bytes_read += len(line)
