@@ -57,8 +57,12 @@ def sniff( sample, delimiters=None):
     quotechar, doublequote, delimiter, skipinitialspace = _guess_quote_and_delimiter(sample, delimiters)
     delimiter1, skipinitialspace1 = _guess_delimiter(sample,delimiters)
 
+    if delimiter is None and delimiter1 is None:
+        raise Error("Could not determine delimiter")
+
     if delimiter is None and delimiter1:
         delimiter = delimiter1
+
 
     if delimiter:
         delimiter= delimiter.strip()
