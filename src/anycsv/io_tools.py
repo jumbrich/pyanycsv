@@ -141,8 +141,23 @@ class BufferedAutoEncodingStream(object):
             resp = requests.get(csv, timeout=1)
             resp.raise_for_status()
 
-            self.input = resp.iter_lines(chunk_size=64 * 1024)#, delimiter=b"\n")
-
+            def my_iter_lines(result):
+                buf = b''
+                for chunk in result.iter_content(chunk_size=64 * 1024, decode_unicode=False):
+                    buf += chunk
+                    pos = 0
+                    while True:
+                        eol = buf.find(b'\n', pos)
+                        if eol != -1:
+                            yield buf[pos:eol]
+                            pos = eol + 1
+                        else:
+                            buf = buf[pos:]
+                            break
+                if buf:
+                    yield buf
+            self.input = my_iter_lines(resp)
+            #self.input = resp.iter_lines(chunk_size=128 * 1024)#, delimiter=b"\n")
         else:
             if not Path(csv).exists():
                 raise FileNotFoundError("File {} does not exist".format(csv))
@@ -177,12 +192,12 @@ class BufferedAutoEncodingStream(object):
         return self
 
     def readline(self):
-
         try:
             if self.lines_read >= self.cur_buffer_size:
                 #we have more lines read as in buffer
 
                 line = next(self.input)
+                print(line)
                 self.hash.update(line)
 
                 self.total_bytes_read += len(line)
