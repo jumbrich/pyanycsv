@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 """Console script for pyyacp."""
+import gzip
 
 import anycsv
 import sys
@@ -72,7 +73,10 @@ def parse_csv(csv, out, bench, bench_out):
     table = anycsv.reader(csv)
 
     if out:
-        fout = open(out, "wt")
+        if out.endswith(".gz"):
+           fout = gzip.open(out, 'wt', newline='')
+        else:
+            fout = open(out, "wt")
     else:
         fout=sys.stdout
 
